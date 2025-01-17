@@ -14,10 +14,12 @@ use style::dom::{TElement, TShadowRoot};
 use style::properties::ComputedValues;
 use style::selector_parser::PseudoElement;
 use style::values::generics::counters::{Content, ContentItem};
+use style::values::specified::Quotes;
 
 use crate::context::LayoutContext;
 use crate::dom::{BoxSlot, LayoutBox, NodeExt};
 use crate::fragment_tree::{BaseFragmentInfo, FragmentFlags, Tag};
+use crate::quotes::quotes_for_lang;
 use crate::replaced::ReplacedContents;
 use crate::style_ext::{Display, DisplayGeneratingBox, DisplayInside, DisplayOutside};
 
@@ -393,6 +395,16 @@ where
     })
 }
 
+fn get_quote_from_pair<I, S>(item: &ContentItem<I>, opening: &S, closing: &S) -> String
+where
+    S: ToString + ?Sized,
+{
+    match item {
+        ContentItem::OpenQuote => opening.to_string(),
+        _ => closing.to_string(),
+    }
+}
+
 /// <https://www.w3.org/TR/CSS2/generate.html#propdef-content>
 fn generate_pseudo_element_content<'dom, Node>(
     pseudo_element_style: &ComputedValues,
@@ -448,10 +460,31 @@ where
                             vec.push(PseudoElementContentItem::Replaced(replaced_content));
                         }
                     },
+                    ContentItem::OpenQuote | ContentItem::CloseQuote => {
+                        // TODO(xiaochengh): calculate quote depth
+                        let depth: usize = 0;
+                        let quote: Option<String> = match &pseudo_element_style.get_list().quotes {
+                            Quotes::QuoteList(quote_list) => {
+                                quote_list.0.get(depth).map(|quote_pair| {
+                                    get_quote_from_pair(
+                                        item,
+                                        &*quote_pair.opening,
+                                        &*quote_pair.closing,
+                                    )
+                                })
+                            },
+                            Quotes::Auto => {
+                                let lang = &pseudo_element_style.get_font()._x_lang;
+                                let quotes = quotes_for_lang(lang.0.as_ref(), depth);
+                                Some(get_quote_from_pair(item, &quotes.opening, &quotes.closing))
+                            },
+                        };
+                        if let Some(quote) = quote {
+                            vec.push(PseudoElementContentItem::Text(quote));
+                        }
+                    },
                     ContentItem::Counter(_, _) |
                     ContentItem::Counters(_, _, _) |
-                    ContentItem::OpenQuote |
-                    ContentItem::CloseQuote |
                     ContentItem::NoOpenQuote |
                     ContentItem::NoCloseQuote => {
                         // TODO: Add support for counters and quotes.
