@@ -401,7 +401,8 @@ where
 {
     match item {
         ContentItem::OpenQuote => opening.to_string(),
-        _ => closing.to_string(),
+        ContentItem::OpenQuote => closing.to_string(),
+        _ => unreachable!("Got an unexpected ContentItem type when processing quotes."),
     }
 }
 
@@ -462,10 +463,9 @@ where
                     },
                     ContentItem::OpenQuote | ContentItem::CloseQuote => {
                         // TODO(xiaochengh): calculate quote depth
-                        let depth: usize = 0;
-                        let quote: Option<String> = match &pseudo_element_style.get_list().quotes {
+                        let maybe_quote = match &pseudo_element_style.get_list().quotes {
                             Quotes::QuoteList(quote_list) => {
-                                quote_list.0.get(depth).map(|quote_pair| {
+                                quote_list.0.get(0).map(|quote_pair| {
                                     get_quote_from_pair(
                                         item,
                                         &*quote_pair.opening,
@@ -475,11 +475,11 @@ where
                             },
                             Quotes::Auto => {
                                 let lang = &pseudo_element_style.get_font()._x_lang;
-                                let quotes = quotes_for_lang(lang.0.as_ref(), depth);
+                                let quotes = quotes_for_lang(lang.0.as_ref(), 0);
                                 Some(get_quote_from_pair(item, &quotes.opening, &quotes.closing))
                             },
                         };
-                        if let Some(quote) = quote {
+                        if let Some(quote) = maybe_quote {
                             vec.push(PseudoElementContentItem::Text(quote));
                         }
                     },
